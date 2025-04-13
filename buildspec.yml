@@ -1,0 +1,27 @@
+version: 0.2
+
+# Running this buildspec plans resources only. It does NOT apply creates and/or updates to those resources.
+# It is assumed applying changes would occur as a manual process following a templates review. Or in the case
+# of a deployment pipeline, there would be an approval step in the PR that applies the terraform plan.
+# 
+# See Terraform docs for suggested use in Pipelines:
+# https://developer.hashicorp.com/terraform/tutorials/automation/automate-terraform
+phases:
+  install:
+    commands:
+      - sudo yum install -y yum-utils
+      - sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+      - sudo yum -y install terraform
+  pre_build:
+    commands:
+      - export DUPLO_TOKEN=$(aws secretsmanager get-secret-value --query SecretString --output text --secret-id arn:aws:secretsmanager:us-east-2:975050254173:secret:duploservices-tfdev01-terraform-preprod-token-PDSH0o)
+      - export DUPLO_TENANT=$DUPLO_TENANT
+      - export DUPLO_PORTAL=$DUPLO_PORTAL
+      - export OBJECT_PATH=s3://$S3_ARTIFACT_BUCKET/duplo-infrastructure-$DUPLO_PORTAL-$DUPLO_PLAN-$DUPLO_TENANT-tfplan
+  build:
+    commands:
+      - export D=terraform/portals/$DUPLO_PORTAL/infrastructures/$DUPLO_PLAN/tenants/$DUPLO_TENANT/$PLAN_FOLDER
+      - cd $D
+      - terraform init -input=false
+      - terraform plan -out=tfplan -input=false
+      - aws s3 cp tfplan $OBJECT_PATH
